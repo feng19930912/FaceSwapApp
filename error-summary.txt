@@ -1,0 +1,5 @@
+1:Error: Could not find or load main class org.gradle.wrapper.GradleWrapperMain
+2-Caused by: java.lang.ClassNotFoundException: org.gradle.wrapper.GradleWrapperMain
+=== tail ===
+Error: Could not find or load main class org.gradle.wrapper.GradleWrapperMain
+Caused by: java.lang.ClassNotFoundException: org.gradle.wrapper.GradleWrapperMain
