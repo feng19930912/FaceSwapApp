@@ -1,0 +1,73 @@
+name: Build APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 解压项目
+        run: |
+          if [ -f project.zip ]; then unzip -o project.zip; fi
+          ls -la
+          test -f settings.gradle.kts
+          chmod +x gradlew
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-34 build-tools;34.0.0'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: 打包 APK
+        run: |
+          set -o pipefail
+          ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee build.log
+
+      - name: 保存错误日志到 build-log 分支
+        if: failure()
+        run: |
+          grep -nE "^e: |error:|FAILURE|What went wrong|Execution failed|Could not" -A6 build.log | head -200 > /tmp/error-summary.txt || true
+          echo "=== tail ===" >> /tmp/error-summary.txt
+          tail -100 build.log >> /tmp/error-summary.txt
+          git config user.name "github-actions"
+          git config user.email "actions@users.noreply.github.com"
+          git checkout --orphan build-log
+          git rm -rf --cached . > /dev/null 2>&1 || true
+          cp /tmp/error-summary.txt error-summary.txt
+          git add -f error-summary.txt
+          git commit -m "build log ${{ github.run_number }}"
+          git push -f origin build-log
+
+      - name: 上传 APK（Artifacts 备份）
+        uses: actions/upload-artifact@v4
+        with:
+          name: FaceSwapLocal-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+      - name: 发布到 Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk FaceSwapLocal.apk
+          gh release create "build-${{ github.run_number }}" FaceSwapLocal.apk \
+            --title "构建 ${{ github.run_number }}" \
+            --notes "安装 FaceSwapLocal.apk 即可"
